@@ -12,6 +12,7 @@ from sklearn.cross_validation import train_test_split
 from itertools import izip
 import cPickle
 import time
+from sklearn import svm
 
 #input: path to metadata file
 #2dim: array of strings containing raw metadata
@@ -74,11 +75,13 @@ def loadDataset(uids, spotPaths, labels):
     for uid, xP, l in izip(uids, spotPaths, labels):
         t, x, y = loadSpots(xP, l)
         if (x.size > 240):
-            uid_idx[uid] = acc
             times=np.concatenate((times, t))
             x_array=np.concatenate((x_array, x), axis=0)
             y_array=np.concatenate((y_array, y))
+            
+            accPrev = acc
             acc += np.shape(x_array)[0]
+            uid_idx[uid] = (accPrev, acc)
             
     #trim off the first row of each array
     times=times[1:]
@@ -127,8 +130,7 @@ if __name__ == '__main__':
     metaDataFile="2015-02-16_14-16-17_2014-04--Sepsis-TF_YC.csv"
     metadata=loadMetadata(metaDataFile, 7)
 
-    #if the serialized dataset has already been generated, load that
-    #else go get a cup of coffee 'cause its gonna be a while
+    """
     if (path.isfile('dataset.pkl')):
         print "Loading pickled dataset"
         start=time.clock()
@@ -137,20 +139,39 @@ if __name__ == '__main__':
             dataset = cPickle.load(handle)
         
         print("Load from pickle %s seconds" % str(time.clock() - start))
-    else:
-        print "Loading dataset from metadata file"
-        
-        start=time.clock()
-        
-        dataset = buildDataset(metadata)
-        
-        print("Load from file took %s seconds" % str(time.clock() - start))
-        start=time.clock()
+    """
+    print "Loading dataset from metadata file"
     
-        with open('dataset.pkl','wb') as handle:
+    start=time.clock()
+    
+    dataset = buildDataset(metadata)
+    
+    print("Load from file took %s seconds" % str(time.clock() - start))
+    start=time.clock()
+
+    with open('dataset.pkl','wb') as handle:
+        cPickle.dump(dataset, handle)
+        
+    print("Pickling took %s seconds" % str(time.clock() - start))
+    
+    ########################################################################
+    #Train the classifier
+    
+    if (path.isfile('mdl.pkl')):
+        print "Loading pickled model"
+        
+        with open('mdl.pkl', 'rb') as handle:
+            dataset = cPickle.load(handle)
+    else:
+        print "Training a new SVC"
+        clf = svm.SVC()
+        clf.fit(dataset['x_train'], dataset['y_train'])
+        
+        with open('mdl.pkl','wb') as handle:
             cPickle.dump(dataset, handle)
-            
-        print("Pickling took %s seconds" % str(time.clock() - start))
+    
+    expIdx = dataset['uid_test']
+    clf.pred(dataset['x_test'][expIdx,:])
         
     
     
